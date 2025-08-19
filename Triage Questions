@@ -1,0 +1,8 @@
+1. If 'X' rule is having poor fidelity and performance.
+    - What is the volume like?
+    - Which artifacts trigger the alert?
+              - If so, are they bengin? Are they a part of operation? Is tuning this out help with volume long term? or it will come back again.
+                        - If come back, might worth to review the rule design.
+    - Any potential faulty logic?
+    - Which technology is the volume coming from the most? (Only one?)
+  
