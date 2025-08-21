@@ -1,0 +1,144 @@
+1. Requirement Discovery
+  - Typically customer (organizational) makes a detection request to me.
+  - Involving Description, Goal, Reason, Log source, Raw Log and Artifacts
+
+• Requesting Organization:
+Think of this as your go-to contact. Include the organization’s name and the person who asked for the detection. 
+That way, you know exactly who to reach out to if you have questions, and they’ll also appreciate a quick heads-up once you’ve built what they asked for.
+
+• Description:
+  - Basically, what do they want us to keep an eye on? 
+  => It could be something straightforward like “notify us when new files pop up in the web server directory,” 
+  => or more general like “tell us if an end user tries to use unauthorized remote admin tools.” 
+  => Any supporting details—like a link to an article or an internal analysis—should be shared by whoever’s making the request.
+
+
+• Reason:
+Why is this detection needed? 
+  - It might be obvious (for example, they found suspicious activity during an investigation), 
+  - or it might help us figure out how urgent it is 
+  - (is this a new trick from a known attacker group, 
+  - or did we just stumble across a random blog post?).
+
+
+• Exception (Exclusion):
+  - When should this rule not fire off an alert? 
+  - Maybe if there’s an approved developer making changes. In other words, if something’s normal, we don’t want extra noise.
+
+
+• Scope (goal):
+  - Where do we apply this rule? 
+  We can narrow down the detection to only certain systems or data to keep things focused. 
+  This also keeps the false positives lower and tells us what data or telemetry we have available (or any limitations we need to consider).
+
+• Evidence (raw log):
+  - If there are samples of malware, logs, or any other evidence that show the issue in action, attach them here. 
+  It’s super helpful for building and testing the detection. 
+  Requests from the SOC, IR teams, or hunt teams should include network or endpoint data they gathered.
+
+Example: 
+ABC has requested we build this detection out for Okta. Reviewing the logging, this is doable where we can find the "externalSessionID". 
+https://developer.okta.com/docs/reference/system-log-query/
+Could we please have this added to this use case?
+
+004246-01 - Concurrent Sessions from Different IPs - O365
+This detection use case alerts on Office 365 user sessions accessed from multiple IP addresses, a potential indicator of adversary-in-the-middle (AiTM) phishing attacks by leveraging Azure AD  logs for 'UserLoggedIn' operations and identifying sessions associated with more than one IP address. If deemed malicious, the consequences could include data theft, account compromise, and internal phishing campaigns, posing significant threats to organizational security.
+
+
+
+
+-------------------------------
+2. Triage
+
+- Based on the requirement and artifacts provided by the customer
+=> I will build up a skeleton of that detection with very generic logic
+      - Simply, to test the water and see how noisy that detection is
+      - From there, I can further look into the data fields and its value to narrow down my rule design.
+
+
+
+Now, I’d look at how often a detection triggers. If one detection goes off way more than others, it might be causing too many false positives and needs tuning. 
+On the flip side, if it never fires, check whether the rule is working or if it’s just so specific that it rarely triggers.
+
+Next, you’d examine what ultimately happens when a detection goes off. 
+If your team uses a case management tool or any system that logs how alerts are closed, you can figure out which detections are the most common false positives after an analyst review.
+
+Finally, keep an eye on how your rules affect overall system performance. 
+You want your detections to be accurate without slowing things down. 
+By following best practices—like optimizing your logic so it doesn’t eat up unnecessary resources—you can prevent any performance issues in production.
+
+
+Example:
+Customer gives a rough logic of their detection.
+
+index=okta sourcetype=OktaIM2:log event_type="okta_event_authentication" outcome.result="SUCCESS" actor.alternateId!="system@okta.com"
+| stats values(authenticationContext.externalSessionId) as session_id values(src_ip) as src_ip earliest(_time) as first_event latest(_time) as last_event by authenticationContext.externalSessionId, actor.alternateId
+| where mvcount(src_ip) > 1
+| eval diff = last_event - first_event
+| where diff >= 0 and diff <= 1800
+
+This is going to be a very noisy rule, 27 events in 30 min level of noisy.
+-> I'd validate to see what is the fidelity here, how noisy is it, what can be improved?
+
+
+-------------------------------
+3. Investigate
+
+  - During this step, you must identify the relevant data sources needed to satisfy the detection requirement.
+        - Analysts will need to understand the intent and scope of the detection, to identify the assets in scope.
+  - During this step, any data source deficiencies will also be identified, and where necessary,
+additional requests will be sent to the appropriate team for resolution (the data engineering requirements
+mentioned as output).
+
+
+Research:
+      During this step, analysts need to understand the detection and classify it based on attacker goals and
+      the associated tactics and techniques (often using the MITRE ATT&CK framework). In reviewing
+      the tactics and techniques, this step will reveal whether similar tactic coverage already exists within
+      the detection environment, and how the new detection requirement can be integrated. This might
+      include the following:
+      • Identifying examples of attacks performed in the past.
+      • Identifying any similar rules, partial matches, or detections for the same TTPs that should be
+      updated rather than a new detection being created.
+      • Identifying variations of the attack that could be performed by the adversary. Here, you can
+      deconstruct the attack to identify the underlying capabilities used and determine which of
+      these capabilities are least likely to vary
+
+=> This step, based on the result of rough logic - I will research about the log source, understand the way it works and see if there is any other artifacts could be added or removed.
+
+For example, customer propose to look for any Okta authentication events.
+However, this will be very noisy and is not accurately aligning with rule intention on concurrent session login from multiple IPs.
+
+After researching, I redesigned the rule that will have higher fidelity with the following approach:
+
+1. Filtering out ("*New IP=NEGATIVE*", "*New Country=NEGATIVE*", "*New Device=NEGATIVE*")
+
+=> "New IP=NEGATIVE" means that the user's current IP address has been seen before in a successful sign-in attempt and is not considered a new or unusual IP address.
+=> "New Country=NEGATIVE" means the user has successfully signed in from this country before.
+=> "New Device=NEGATIVE" means the device has been previously recognized and is not flagged as a potential risk factor for triggering MFA
+
+2. Filter only on eventType "user.session.start" as the 'user.session.start' event signifies an initial session start after a successful authentication meaning it will always occur instead of event_type="okta_event_authentication" which was extremely broad - this same idea was discussed in RQ24595503.
+
+3. Counting on both unique IP addresses and unique countries which likely indicates suspicious events such as VPN usage.
+
+
+Logic:
+index=okta sourcetype=OktaIM2:log AND eventType="user.session.start" AND outcome.result="SUCCESS" AND actor.alternateId!="system@okta.com"
+| spath input=_raw output=behaviors debugContext.debugData.behaviors
+| search NOT behaviors IN ("*New IP=NEGATIVE*", "*New Country=NEGATIVE*", "*New Device=NEGATIVE*")
+| bin _time span=30m
+| stats values(authenticationContext.externalSessionId) as session_id values(src_ip) as src_ip earliest(_time) as first_event latest(_time) as last_event values(client.geographicalContext.country) as country dc(src_ip) as event_count_1 dc(client.geographicalContext.country
+) as event_count_2 by authenticationContext.externalSessionId, actor.alternateId
+| where (event_count_1 >= 2 AND event_count_2 >= 2) 
+
+
+
+-------------------------------
+4. Development
+
+-------------------------------
+5. Test
+
+-------------------------------
+6. Deploy
+
