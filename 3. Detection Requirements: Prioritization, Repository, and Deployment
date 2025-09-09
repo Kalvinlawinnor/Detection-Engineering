@@ -1,1 +1,24 @@
 
+How to leverage the sources and requirement chracteristics to produce requirement?
+=> An important aspect of detection engineering to discuss and include from the beginning of the lifecycle
+is the processes that should be created along with the tools to be leveraged in order to efficiently
+collect and track detection requirements. 
+
+For tools:
+=> We are looking at productivity tools that can assist in implementing
+the processes developed by the DE team, rather than technical solutions used for developing detections.
+
+    > 3 keys technologies:
+          - Ticketing system.
+                            > 
+          - Communication platform.
+                            >
+          - Wiki.
+                            > 
+
+
+
+
+1. Requirement Discovery.
+
+
