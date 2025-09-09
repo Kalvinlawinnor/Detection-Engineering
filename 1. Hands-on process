@@ -45,6 +45,19 @@ Could we please have this added to this use case?
 This detection use case alerts on Office 365 user sessions accessed from multiple IP addresses, a potential indicator of adversary-in-the-middle (AiTM) phishing attacks by leveraging Azure AD  logs for 'UserLoggedIn' operations and identifying sessions associated with more than one IP address. If deemed malicious, the consequences could include data theft, account compromise, and internal phishing campaigns, posing significant threats to organizational security.
 
 
+Summary:
+
+In order to turn a requirement into a design and,
+ultimately, into detection code, we need the following information captured as part of our Requirements
+Discovery phase:
+• The Requesting Organization, that is, where the request originated
+• A brief Description of what needs to be detected, either in technical or high-level terms
+• The Reason for the requirement, which will be used to help in prioritization in later phases
+• Any Exceptions to be taken into account; essentially a list of possible false positives
+• The Scope, which assists in reducing false positives by only implementing detections where relevant
+• Evidence should be attached to the request, such as packet captures (PCAPs) or logs related
+to the event trying to be detected
+
 
 
 -------------------------------
