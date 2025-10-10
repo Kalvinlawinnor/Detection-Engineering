@@ -145,17 +145,6 @@ index=okta sourcetype=OktaIM2:log AND eventType="user.session.start" AND outcome
 | where (event_count_1 >= 2 AND event_count_2 >= 2) 
 
 
-2 events
-Where the RQ Log Source is Okta Identity
-Where the event type is case-insensitive "user.session.start"
-Where the misc{New IP} is not case-insensitive "negative"
-Where the misc{New Country} is not case-insensitive "negative"
-Where the misc{New Device} is not case-insensitive "negative"
-Where the reason{outcome.result} is success
-With unique source IP{client.ipAddress} and unique source country{client.geographicalContext.country}
-With the same session ID{authenticationContext.externalSessionId}
-Within 30 minutes
-
 
 -------------------------------
 4. Development
